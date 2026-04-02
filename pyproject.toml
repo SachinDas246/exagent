@@ -1,0 +1,27 @@
+[project]
+name = "exagent"
+version = "0.1.0"
+description = "python library for creating agents"
+authors = [
+    { name = "SachinDas", email = "[EMAIL_ADDRESS]" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+
+requires-python = ">=3.9"
+
+dependencies = [
+]
+
+homepage = "https://github.com/SachinDas246/exagent"
+repository = "https://github.com/SachinDas246/exagent"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
