@@ -1,6 +1,6 @@
 [project]
 name = "exagent"
-version = "0.0.3"
+version = "0.0.5"
 description = "python library for creating agents"
 authors = [
     { name = "SachinDas", email = "SachinDas246@users.noreply.github.com" }
