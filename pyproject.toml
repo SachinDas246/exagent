@@ -3,7 +3,7 @@ name = "exagent"
 version = "0.1.0"
 description = "python library for creating agents"
 authors = [
-    { name = "SachinDas", email = "[EMAIL_ADDRESS]" }
+    { name = "SachinDas", email = "SachinDas246@users.noreply.github.com" }
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
