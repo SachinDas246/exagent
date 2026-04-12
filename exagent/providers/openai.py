@@ -85,6 +85,7 @@ class OpenAIProvider(BaseProvider):
         api_key: str | None = None,
         model: str = "gpt-4.1-mini",
         env_path: str = ".env",
+        parallel_tool_calls: bool | None = None,
     ):
         try:
             from openai import OpenAI
@@ -96,6 +97,7 @@ class OpenAIProvider(BaseProvider):
         api_key = api_key or resolve_api_key("OPENAI_API_KEY", env_path)
         self.client = OpenAI(api_key=api_key)
         self.model = model
+        self.parallel_tool_calls = parallel_tool_calls
 
     # -- request builder ----------------------------------------------------
 
@@ -111,6 +113,8 @@ class OpenAIProvider(BaseProvider):
         }
         if tools:
             kwargs["tools"] = [t.to_openai() for t in tools]
+            if self.parallel_tool_calls is not None:
+                kwargs["parallel_tool_calls"] = self.parallel_tool_calls
         return kwargs
 
     # -- response parser ----------------------------------------------------

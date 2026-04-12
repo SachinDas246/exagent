@@ -4,6 +4,7 @@ from .utils import load_file_as_string, load_skill
 from .model import Model
 from .tool import Tool, tool
 from .types import ToolCall, ProviderResponse
+from .shell import shell
 
 __all__ = [
     "Agent",
@@ -16,4 +17,5 @@ __all__ = [
     "tool",
     "ToolCall",
     "ProviderResponse",
+    "shell",
 ]

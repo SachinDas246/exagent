@@ -9,14 +9,23 @@ class OrchestratorAgent(Agent):
     orchestrator's LLM as a tool. The LLM picks the right agent(s),
     calls them in sequence if needed, and surfaces the final result.
 
+    Class attributes:
+        parallel: Set to True to allow the model to call multiple agents in
+                  a single turn. Defaults to False (serial) because agent
+                  calls almost always have data dependencies.
+
     Usage::
 
         class MyOrchestrator(OrchestratorAgent):
+            parallel = True  # opt-in to parallel calls
+
             def __init__(self):
                 self.set_model("openai", "gpt-4.1-mini")
                 self.add_agent(my_agent, name="agent_name", description="...")
                 super().__init__()
     """
+
+    parallel: bool = False
 
     _system_prompt = (
         "You are an orchestrator. You have a set of specialist agents available as tools. "
@@ -24,6 +33,15 @@ class OrchestratorAgent(Agent):
         "If a task spans multiple specialists, call them in sequence and combine their results. "
         "Always return the final answer to the user clearly and concisely."
     )
+
+    def __init__(self):
+        super().__init__()
+        # Inject parallel_tool_calls into the model's provider kwargs so it
+        # takes effect when the provider is lazily instantiated on first use.
+        # Only applies to OpenAI — Anthropic does not support this parameter.
+        if self.model is not None and self.model.provider.lower() == "openai":
+            if not getattr(self, "parallel", False):
+                self.model.provider_kwargs.setdefault("parallel_tool_calls", False)
 
     def add_agent(
         self,
