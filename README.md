@@ -13,6 +13,7 @@ Works with **OpenAI** and **Anthropic** models out of the box.
 - **Streaming or non-streaming** — same API, flip a boolean
 - **Observability hooks** for inspecting tool calls and per-iteration responses
 - **Provider-agnostic** — OpenAI and Anthropic supported with a unified interface
+- **Multi-agent orchestration** — route tasks across specialist agents automatically
 - **Small surface area** — one `Agent` class, one `@tool` decorator, a handful of events
 
 ## Installation
@@ -257,6 +258,145 @@ self.load_system_skills(["skills/writing.md", "skills/debugging.md"])
 
 The skill's `name` and `description` are injected into the system prompt as a menu of capabilities the model should apply when relevant.
 
+### Example: agent with a skill
+
+Given a skill file `skills/concise.md`:
+
+```markdown
+---
+name: concise-replies
+description: Use this skill to keep all responses short and to the point.
+---
+
+Reply in plain language. Avoid bullet points unless the user asks for a list.
+Never repeat the user's question back to them. Keep answers under three sentences.
+```
+
+Load it onto an agent:
+
+```python
+from exagent import Agent, tool
+
+@tool
+def get_quote(topic: str) -> str:
+    """Return a well-known quote on the given topic."""
+    quotes = {
+        "perseverance": "It does not matter how slowly you go as long as you do not stop.",
+        "curiosity": "The important thing is not to stop questioning.",
+    }
+    return quotes.get(topic.lower(), "No quote found for that topic.")
+
+class QuoteAgent(Agent):
+    def __init__(self):
+        self.system_description = "You are a helpful assistant that shares quotes."
+        self.set_model("anthropic", "claude-sonnet-4-5")
+        self.add_tool(get_quote)
+        self.load_system_skill("skills/concise.md")
+        super().__init__()
+
+agent = QuoteAgent()
+print(agent.run("Share a quote about curiosity."))
+```
+
+The `concise-replies` skill is listed in the system prompt. The model applies it when composing its reply — keeping the response short — without any extra prompt engineering on your part.
+
+## Orchestrator
+
+`OrchestratorAgent` lets you build a router that delegates tasks to specialist agents automatically. Each registered agent is exposed to the orchestrator's LLM as a tool — the model reads their descriptions and calls whichever fits the task. If a task spans multiple specialists, it calls them in sequence.
+
+```python
+from exagent import Agent, tool
+from exagent.orchestrator import OrchestratorAgent
+
+# --- Specialist agents ---
+
+@tool
+def calculate(expression: str) -> str:
+    """Evaluate an arithmetic expression and return the result."""
+    ...
+
+class CalculatorAgent(Agent):
+    def __init__(self):
+        self.system_description = "You are a calculator assistant."
+        self.set_model("openai", "gpt-4.1-mini")
+        self.add_tool(calculate)
+        super().__init__()
+
+@tool
+def word_count(text: str) -> str:
+    """Count the number of words in the given text."""
+    return f"{len(text.split())} words"
+
+class TextAgent(Agent):
+    def __init__(self):
+        self.system_description = "You are a text processing assistant."
+        self.set_model("openai", "gpt-4.1-mini")
+        self.add_tool(word_count)
+        super().__init__()
+
+# --- Orchestrator ---
+
+class MyOrchestrator(OrchestratorAgent):
+    def __init__(self):
+        self.set_model("openai", "gpt-4.1-mini")
+        self.add_agent(
+            CalculatorAgent(),
+            name="calculator",
+            description="Handles arithmetic and numeric calculations.",
+        )
+        self.add_agent(
+            TextAgent(),
+            name="text_processor",
+            description="Handles word counts, character counts, and text operations.",
+        )
+        super().__init__()
+
+orch = MyOrchestrator()
+print(orch.run("What is 2847 * 193?"))           # → routed to calculator
+print(orch.run("How many words in 'hello world'?"))  # → routed to text_processor
+```
+
+### How routing works
+
+The orchestrator's system prompt instructs the model to pick the best agent tool for each task. The model uses the `description` you provide at registration time to make that decision — write descriptions that are specific about what the agent can and cannot handle.
+
+If a task needs two specialists, the model calls them in sequence within a single `run()` / `stream()` call:
+
+```
+User: "Calculate 15% of 840, then count the characters in the result."
+
+Orchestrator LLM → calls calculator("840 * 0.15")  → "126.0"
+               → calls text_processor("126.0")     → "4 characters"
+               → replies: "15% of 840 is 126.0, which has 4 characters."
+```
+
+### Registering agents
+
+```python
+orchestrator.add_agent(agent, name="agent_name", description="...")
+```
+
+- `name` — the tool name the LLM uses to call this agent. Must be unique.
+- `description` — what this agent handles and when to use it. If omitted, falls back to the agent's `system_description`.
+
+Each sub-agent uses its own already-configured model. The orchestrator does not control which model the specialists use.
+
+### Streaming with the orchestrator
+
+`stream()` works the same as on a regular agent. `tool_call` events show which specialist was chosen, and `tool_result` events carry what it returned:
+
+```python
+for event in orch.stream("What is 128 * 64?"):
+    if event["type"] == "text_delta":
+        print(event["text"], end="", flush=True)
+    elif event["type"] == "tool_call":
+        print(f"\n[routing to] {event['tool_call'].name}")
+    elif event["type"] == "tool_result":
+        print(f"[agent result] {event['content']}")
+    elif event["type"] == "done":
+        print()
+```
+
 ## API reference
 
 ### `Agent`
@@ -267,6 +407,13 @@ The skill's `name` and `description` are injected into the system prompt as a me
 - `agent.run(prompt, max_iterations=10, on_tool_call=None, on_iteration=None) -> str` — drive the loop with the non-streaming provider API and return the final text
 - `agent.stream(prompt, max_iterations=10, on_tool_call=None, on_iteration=None) -> Iterator[dict]` — drive the loop with the streaming provider API and yield events
 - `agent.chat_history: list` — full conversation history including tool calls and results
+
+### `OrchestratorAgent`
+
+Extends `Agent`. Import from `exagent.orchestrator`.
+
+- `orchestrator.add_agent(agent, name, description=None)` — register a specialist agent as a callable tool. `description` falls back to the agent's `system_description` if omitted.
+- All `Agent` methods (`run`, `stream`, `set_model`, hooks) are inherited and work identically.
 
 ### `@tool` decorator
 
