@@ -6,6 +6,8 @@ Works with **OpenAI** and **Anthropic** models out of the box.
 
 > **Note:** This project is under active development. APIs may change between versions.
 
+**Full documentation:** [sachindas246.github.io/exagent_docs](https://sachindas246.github.io/exagent_docs/)
+
 ## Features
 
 - **Tool calling** with a `@tool` decorator that infers JSON schema from type hints
